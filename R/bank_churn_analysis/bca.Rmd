@@ -1,0 +1,473 @@
+---
+title: "BANK CHURN ANALYSIS"
+author: "Ezo YEDİGÖL"
+date: "2025-06-21"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+Business Task
+Analyzing the customer dataset provided by ABC Multinational Bank to highlight any trends in the data and provide insights.
+
+About Dataset
+We have been provided a dataset in .csv(Comma Separated Value) format, containing 10,000 customers from the bank and each customer has the following attributes;
+
+Customer ID - The Unique ID of each individual customer
+Credit Score - A number depicting the customer's credithworthiness
+Country - The country the customer banks from
+Gender - The gender the customer identifies with
+Age - Depicts the customers age
+Tenure - Indicates how length in years the customer has been with the bank
+Balance - The amount currently available in the customer's account
+Products Number - The number of products purchased by the customer through the bank
+Credit Card - Indicates the customer has a credit card
+Active Member - Indicates if the customer is an active or inactive
+Estimated Salary - Bank Estimation of the income of the customer
+Churn - Indicator of if the customer has left the bank or not
+
+STEP-1: LOADING AND CLEANING THE DATA
+
+```{r}
+#Loading Starting Packages
+library(dplyr)
+library(ggplot2)
+library(corrplot)
+library(readr)
+library(tidyverse)   # For data manipulation and visualization
+library(skimr)       # For summary statistics
+library(janitor)     # For cleaning column names
+```
+
+```{r}
+# Load the dataset
+bank <- read_csv("C:/RProjects/data/bank_churn.csv")
+```
+
+STEP-2: PREPARING THE DATA
+
+```{r}
+head(bank)
+```
+
+- The dataset contains information about bank customers and whether they have churned (i.e., left the bank).
+- Each row represents a unique customer and includes demographic features (such as age, gender, and country), financial information (credit score, balance, estimated salary), behavioral data (tenure, number of products, whether they have a credit card or are active members), and a target variable churn indicating whether the customer has exited the bank.
+
+For example:
+- The first customer is a 42-year-old female from France with a credit score of 619, a balance of 0, and has been a customer for 2 years.
+- The third customer has a high balance and uses 3 products, indicating potentially high value.
+
+These initial rows help us get a basic understanding of the dataset before conducting deeper exploratory data analysis (EDA).
+
+```{r}
+# Check the structure of the dataset
+glimpse(bank)
+```
+
+
+```{r}
+summary(bank)
+```
+- Median tenure of clients is about 5 years.
+- Median age is about 37 years old (with an oldest [max] at 92… impressive!).
+- Most clients (according to the median) only use 1 of the bank’s products.
+- Since the average churn is ~ 0.20, I can already infer this bank is keeping more clients than churning. I’ll analyze the churn metric more a little later.
+
+```{r}
+# Check for missing values
+colSums(is.na(bank))
+
+```
+- No Missing Data: All variables have 0 missing values (n_missing = 0), which is great for analysis.
+
+Numeric Variables:
+- customer_id: Just an ID number.
+- credit_score: Average is around 650.
+- age: Average age is about 39.
+- tenure: Customers stay with the bank for about 5 years on average.
+- balance: Account balances vary a lot; many customers have 0 balance.
+- products_number: Most customers have 1 or 2 bank products.
+- credit_card and active_member: These are 0/1 (binary) variables, showing about 71% have a credit card and 52% are active members.
+- estimated_salary: Average estimated salary is around 100,000.
+- churn: This is our target variable. About 20.37% of customers have churned (left the bank). This shows an imbalance, meaning fewer people churned than stayed.
+
+Categorical Variables:
+- country: There are 3 unique countries (e.g., France, Spain, Germany).
+- gender: There are 2 unique genders (Male, Female).
+
+In short, the data is clean (no missing values) and ready for further analysis, but we need to pay attention to the churn imbalance during modeling.
+
+
+STEP-3:EXPLORATORY DATA ANALYSIS
+
+```{r}
+# Calculate churn rate
+churn_rate <- mean(bank$churn)
+print(paste("Customer Churn Rate:", round(churn_rate * 100, 2), "%"))
+
+# Alternatively, to see the counts of churned vs. non-churned:
+table(bank$churn)
+```
+- The first line tells us that 20.37% of the customers have churned (left the bank).
+- The table(df$churn) output shows the exact numbers:
+ 0: 7963 customers did NOT churn (they stayed).
+ 1: 2037 customers DID churn (they left).
+This means that a significant portion of customers are leaving, and our dataset has more customers who stayed than who churned.
+
+```{r}
+#Exploratory Analysis: Most Customers do not Churn (0)
+ggplot(data = bank, aes(x = churn)) + 
+  geom_bar(width = 0.6, fill = "mediumvioletred") + 
+  labs(title = "Churn Distribution", x = "Churn", y = "Count")
+```
+- About 80% of the client base has not churned. These may be cause some inbalance problem in our project that we need to fix in the coming up.
+
+```{r}
+ggplot(bank, aes(x = country, fill = country)) + geom_bar() + 
+scale_fill_brewer(palette = "Blues") + 
+labs(title = "Bank Customers vs Country", x = "Country", y = "Customer Count", subtitle = "customers are grouped by the countries they bank from") + 
+theme_minimal()
+```
+- The bank has a large customer base from France; with more than 50% of the customers banking from France.
+
+```{r}
+# Churn distribution by country (proportional)
+ggplot(bank, aes(x = country, fill = factor(churn))) +
+  geom_bar(position = "fill") +
+  labs(title = "Churn Distribution by Country",
+       x = "Country",
+       y = "Proportion",
+       fill = "Churn (1=Yes)") +
+  theme_minimal()
+
+# Churn counts by country
+ggplot(bank, aes(x = country, fill = factor(churn))) +
+  geom_bar(position = "dodge") +
+  labs(title = "Churn Counts by Country",
+       x = "Country",
+       y = "Number of Customers",
+       fill = "Churn (1=Yes)") +
+  theme_minimal()
+
+```
+
+- We can see here that Germany has more likely have clients who churned.
+
+
+```{r}
+# Age distribution (Histogram)
+ggplot(bank, aes(x = age)) +
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black") + # 5-year age bins
+  labs(title = "Age Distribution",
+       x = "Age",
+       y = "Number of Customers") +
+  theme_minimal()
+
+# Age distribution based on Churn status (Density Plot)
+ggplot(bank, aes(x = age, color = factor(churn), fill = factor(churn))) +
+  geom_density(alpha = 0.5) + # Add transparency
+  labs(title = "Age Distribution by Churn Status",
+       x = "Age",
+       y = "Density",
+       color = "Churn (1=Yes)",
+       fill = "Churn (1=Yes)") +
+  theme_minimal()
+```
+
+- The ratio of churn seems to increase with age.
+
+DATA FORMATTING
+
+```{r}
+sapply(bank, typeof)
+```
+-Re-formatting active member and credit card just in case.
+```{r}
+bank <- bank %>%
+  mutate_at(vars(active_member, credit_card), as.logical)
+```
+
+-Correlation
+```{r}
+corrplot(cor(bank[,sapply(bank, is.numeric)]))
+```
+- The strongest association with the target variable churn is observe is age.
+- Features like estimated_salary, tenure, and credit_score show minimal linear relationships with churn.
+- This plot helps in feature selection for building effective predictive models.
+
+STEP-4: CREATING A  LOGISTIC REGRESSION MODEL
+```{r}
+# Fit logistic regression model
+log_model <- glm(churn ~ credit_score + age + tenure + balance + products_number +
+                   estimated_salary + gender + country + credit_card + active_member,
+                 data = bank,
+                 family = binomial)  # Because churn is a binary outcome
+```
+
+```{r}
+summary(log_model)
+```
+- Age, account balance, gender, number of products, country (Germany), active member status, and credit score are the key predictors of customer churn. Active membership and gender (being male) strongly reduce churn probability, while being from Germany and being older increase it.
+
+```{r}
+library(caret)  # for confusionMatrix
+
+# Predict probabilities
+predicted_probs <- predict(log_model, type = "response")
+
+# Convert probabilities to binary predictions (threshold = 0.5)
+predicted_classes <- ifelse(predicted_probs > 0.5, 1, 0)
+
+# Convert to factor to match actual values
+predicted_classes <- as.factor(predicted_classes)
+actual_classes <- as.factor(bank$churn)
+
+# Create confusion matrix
+conf_matrix <- confusionMatrix(predicted_classes, actual_classes, positive = "1")
+print(conf_matrix)
+```
+- Accuracy: 81.03% – the model correctly predicts about 81% of all customer churn statuses.
+
+- Sensitivity (Recall for Class 1 / True Positive Rate): 21.45% – only about 21% of actual churners were correctly identified.
+
+- Specificity (True Negative Rate): 96.27% – the model is very good at predicting non-churners.
+
+- Precision (Pos Pred Value): 59.54% – when the model predicts churn, it's correct about 60% of the time.
+
+- Balanced Accuracy: 58.86% – average of sensitivity and specificity; shows imbalance in performance.
+
+The model shows high overall accuracy, but it struggles to correctly identify churners (low sensitivity). This is common in imbalanced classification problems, where the churned class is a minority. Business-wise, this could mean many churn-risk customers are being missed, which is costly.
+
+
+STEP-5: FEATURE ENGINEERING
+
+```{r}
+## Dropping the insignificant column ('customer_id')
+bank <- select(bank, -customer_id)
+```
+
+```{r}
+## Creating dummy variables from 'gender'
+bank <- mutate(bank, is_female = if_else(gender == "Female", 1, 0))
+```
+
+```{r}
+# Remove the original 'gender' column:
+bank <- select(bank, -gender)
+```
+
+Creating dummy variables from 'country'
+
+```{r}
+# Display all unique values:
+unique_countries <- unique(bank$country)
+print("Unique countries in the 'country' column:")
+print(unique_countries)
+```
+```{r}
+# Creating dummy variables using model.matrix():
+bank <- cbind(bank, model.matrix(~ country - 1, bank))
+```
+
+```{r}
+# Remove the original 'country' column:
+bank <- bank[, -which(names(bank) == "country")]
+```
+
+```{r}
+## Relocating the 'churn' (response) column/variable to the rightmost of the dataframe
+bank <- select(bank, -churn, churn)
+```
+
+STEP-6:MODEL BUILDING
+```{r}
+## Load the relevant libraries
+library(caTools) # Tools for EDA
+library(ggplot2) # Enables Data Visualization
+library(broom) # Enhances Data Pre-processing
+library(gmodels) # Assists with creating machine learning models
+library(pROC) # Implements ROC-related methods and functions
+library(lattice) # Data Visualization
+library(caret) # Regression training
+```
+
+Create the 'train' and 'test' data partitions
+
+```{r}
+set.seed(123)  # Set seed for reproducibility
+split <- sample.split(bank$churn, SplitRatio = 0.8) # Create the split index
+train_data <- bank[split, ]  # Subset training data using the split index
+test_data <- bank[!split, ]  # Subset testing data using the negated split index
+test_data$churn <- factor(test_data$churn)
+```
+
+```{r}
+## Logistic Regression
+LR_model <- glm(churn ~ ., family = binomial, data = train_data)
+
+## Support Vector Machines (SVMs)
+library(e1071) # Implements the methods/functions for SVMs
+SVM_model <- svm(churn ~ ., data = train_data, kernel = "radial")  # Use radial kernel by default
+
+## Random Forests (RF)
+library(randomForest) # Implements the methods/functions for RFs
+RF_model <- randomForest(churn ~ ., data = train_data, ntree = 500)  # Set number of trees to 500
+
+## Naive Bayes
+NB_model <- naiveBayes(churn ~ ., data = train_data)
+```
+Model Evaluation
+
+```{r}
+## Ensure outcome variable is a factor with two levels
+train_data$churn <- factor(train_data$churn)
+```
+
+Logistic Regression
+
+```{r}
+# View model summary
+summary(LR_model)
+```
+-The Logistic Regression model demonstrates moderate performance in predicting customer churn. With an accuracy of 81% and high sensitivity (96%), it performs well in identifying non-churners. However, it lacks specificity (22%), meaning it struggles to detect actual churners. Some variables, such as age and active membership, are statistically significant. While useful for interpretation and insights, this model may be insufficient for high-stakes prediction tasks.
+
+```{r}
+# Visualize coefficients
+LR_coef_plot <- ggplot(data = tidy(LR_model), aes(x = term, y = estimate)) +
+  geom_pointrange(aes(ymin = estimate - std.error, ymax = estimate + std.error)) +
+  geom_hline(yintercept = 0, linetype = "dashed")
+print(LR_coef_plot)
+```
+
+```{r}
+# Make predictions on the test data
+LR_predictions <- predict(LR_model, newdata = test_data, type = "response")
+```
+
+```{r}
+# Confusion Matrix of Performance
+# Ensure appropriate data types for confusion matrix
+LR_predictions_factor <- factor(LR_predictions > 0.5, levels = c(FALSE, TRUE))
+levels(LR_predictions_factor) <- levels(test_data$churn)
+
+# Construct and Present Confusion Matrix
+confusionMatrix(LR_predictions_factor, test_data$churn)
+```
+
+```{r}
+# Visualization of ROC curve of the model
+LR_roc_curve <- roc(test_data$churn, LR_predictions)
+plot(LR_roc_curve)
+title("Logistic Regression ROC Curve", outer = T, line = -1.5)
+```
+
+Support Vector Machines(SVM)
+```{r}
+# View model summary
+summary(SVM_model)
+```
+
+```{r}
+# Make predictions on the test data
+SVM_predictions <- predict(SVM_model, newdata = test_data)
+SVM_predictions_binary <- ifelse(SVM_predictions >= 0.5, 1, 0)
+```
+
+```{r}
+# Confusion Matrix of Performance
+SVM_predictions_factor <- factor(SVM_predictions_binary, levels = levels(test_data$churn))
+levels(SVM_predictions_factor) <- levels(test_data$churn)
+confusionMatrix(SVM_predictions_factor, test_data$churn)
+```
+- The Support Vector Machine model outperforms logistic regression with an accuracy of 85.6%. It demonstrates excellent sensitivity (98.4%) and improved specificity (35%), reflecting a better balance in identifying both churners and non-churners. The ROC curve suggests solid classification performance, making SVM a more capable yet computationally heavier option.
+
+```{r}
+# Visualization of ROC curve of the model
+SVM_roc_curve <- roc(test_data$churn, SVM_predictions_binary)
+plot(SVM_roc_curve)
+title("SVM ROC Curve", outer = T, line = -1.5)
+```
+
+Random Forest
+
+```{r}
+# View model summary
+summary(RF_model)
+```
+
+```{r}
+# Make predictions on the test data
+RF_predictions <- predict(RF_model, newdata = test_data)
+RF_predictions_binary <- ifelse(RF_predictions >= 0.5, 1, 0)
+```
+
+```{r}
+# Confusion Matrix of Performance
+RF_predictions_factor <- factor(RF_predictions_binary, levels = c(0,1))
+levels(RF_predictions_factor) <- levels(test_data$churn)
+confusionMatrix(RF_predictions_factor, test_data$churn)
+```
+- Random Forest delivered the best overall performance, achieving an accuracy of 87.2% and balanced classification abilities (Sensitivity: 96.5%, Specificity: 50.8%). It clearly outperforms other models, particularly in detecting churners. Due to its ensemble nature, it minimizes overfitting and offers strong predictive power, making it the optimal choice for deployment.
+
+```{r}
+# Visualization of ROC curve of the model
+RF_roc_curve <- roc(test_data$churn, as.numeric(RF_predictions_factor))
+plot(RF_roc_curve)
+title("Random Forests ROC Curve", outer = T, line = -1.5)
+```
+Naive Bayes
+
+```{r}
+# View model summary
+summary(NB_model)
+```
+```{r}
+# Make predictions on the test data
+NB_predictions <- predict(NB_model, newdata = test_data)
+```
+
+```{r}
+# Confusion Matrix of Performance
+confusionMatrix(NB_predictions, test_data$churn)
+```
+
+- The Naive Bayes model shows reasonable predictive power with an accuracy of 81.6%. It offers high sensitivity (92.7%) and moderate specificity (38.3%). While not as strong as Random Forest or SVM, its simplicity, speed, and interpretability make it a solid baseline model or a complementary classifier in ensemble methods.
+
+```{r}
+# Visualization of ROC curve of the model
+NB_roc_curve <- roc(test_data$churn, as.numeric(NB_predictions))
+plot(NB_roc_curve)
+title("Naive Bayes ROC Curve", outer = T, line = -1.5)
+```
+
+Model Deployment
+```{r}
+## Model selection
+# The Random Forest (RF) model was chosen due to its relatively greater accuracy
+best_Model <- RF_model
+```
+
+```{r}
+# Saving the model
+saveRDS(best_Model, "rf_model.rds")
+```
+
+```{r}
+# Loading the model
+deployed_model <- readRDS("rf_model.rds")
+```
+
+```{r}
+# Creating a function to automate and make predictions (on new unseen data)
+predict_churn <- function(new_data) {
+  predictions <- predict(deployed_model, new_data)
+  return(predictions)
+}
+```
+
+- In this project, I implemented and evaluated four machine learning models to predict customer churn using a banking dataset. After comparing model metrics such as accuracy, sensitivity, specificity, and ROC curves, the Random Forest model emerged as the best performer. It was selected for deployment and saved using R's saveRDS method for future use. This workflow reflects my ability to build, compare, and operationalize classification models for real-world applications.
+
+- After selecting the best-performing model (Random Forest), it would be integrated into the company's systems, such as a CRM or dashboard. In a real-world scenario, this model would predict churn likelihood for each new or existing customer, enabling the business to take proactive actions. The model would be regularly monitored, retrained if needed, and deployed as part of the company's data-driven decision-making workflow.
+
+
+
