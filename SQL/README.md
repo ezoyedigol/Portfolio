@@ -5,7 +5,7 @@ This project contains intermediate level SQL analyses using the Northwind sample
 ## 📁 Files
 
 - `northwind_analysis.sql` – Contains all SQL queries
-- `https://github.com/ezoyedigol/Portfolio/tree/main/SQL/northwind_results` 
+- 'northwind_results` 
 
 ## 🧠 Key Analyses Performed
 
